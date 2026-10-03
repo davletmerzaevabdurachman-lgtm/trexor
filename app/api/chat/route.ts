@@ -1,3 +1,16 @@
-import {NextRequest,NextResponse} from "next/server";
-const keys=[process.env.GROQ_API_KEY_1,process.env.GROQ_API_KEY_2,process.env.GROQ_API_KEY_3].filter(Boolean) as string[];
-export async function POST(req:NextRequest){try{const {messages,model="llama-3.3-70b-versatile"}=await req.json();if(!keys.length)return NextResponse.json({error:"Kein GROQ_API_KEY gesetzt. Lege ihn in .env.local an."},{status:500});for(const key of keys){const r=await fetch("https://api.groq.com/openai/v1/chat/completions",{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${key}`},body:JSON.stringify({model,messages,temperature:.2})});if(r.ok){const d=await r.json();return NextResponse.json({content:d.choices?.[0]?.message?.content??""})}if(![429,500,502,503,504].includes(r.status))return NextResponse.json({error:`Groq API Fehler (${r.status})`},{status:r.status})}return NextResponse.json({error:"Alle Groq-Schlüssel sind gerade nicht verfügbar."},{status:503})}catch{return NextResponse.json({error:"Ungültige Anfrage."},{status:400})}}
+import { groqChat } from "@/lib/groq";
+export const runtime = "nodejs";
+const SYSTEM = `Du bist TREXOR, ein vielseitiger, kluger KI-Assistent: Du beantwortest Fragen zu jedem Thema,
+erklärst, analysierst, rechnest, schreibst Texte, planst und programmierst.
+Antworte in der Sprache des Nutzers (Standard: Deutsch), klar, korrekt und so ausführlich wie nötig, nicht länger.
+Denke Probleme sorgfältig Schritt für Schritt durch, bevor Du antwortest. Sei ehrlich, wenn Du etwas nicht sicher weißt.
+Nutze Markdown (Absätze, **fett**, Codeblöcke mit Sprache).
+Wenn der Nutzer eine Website, Web-App oder ein Tool möchte, liefere GENAU EINE vollständige, eigenständige
+index.html (HTML+CSS+JS inline, keine externen Ressourcen) in einem einzigen \`\`\`html Codeblock, damit die Live-Preview sie anzeigen kann.
+Bei Änderungswünschen gib die komplette aktualisierte Datei zurück. Für andere Programmiersprachen nutze normale Codeblöcke.`;
+export async function POST(req: Request) {
+  const { messages, think } = await req.json();
+  const res = await groqChat([{ role: "system", content: SYSTEM }, ...messages], !!think, req.signal);
+  if (!res.ok || !res.body) return new Response("KI-Anfrage fehlgeschlagen", { status: 502 });
+  return new Response(res.body, { headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" } });
+}
