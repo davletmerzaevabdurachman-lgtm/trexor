@@ -26,12 +26,33 @@ export default function Home() {
   const loaded = useRef(false);
 
   useEffect(() => {
-    try { const s = localStorage.getItem("trexor.chats"); if (s) { const c = JSON.parse(s); setChats(c); setActiveId(c[0]?.id ?? null); } } catch {}
+    try {
+      const raw = localStorage.getItem("trexor.chats.v2");
+      if (raw) {
+        const parsed: unknown = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          const safe: Chat[] = parsed.filter((c): c is Chat =>
+            !!c &&
+            typeof c === "object" &&
+            typeof (c as Chat).id === "string" &&
+            typeof (c as Chat).title === "string" &&
+            Array.isArray((c as Chat).msgs) &&
+            (c as Chat).msgs.every(
+              m => !!m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string"
+            )
+          );
+          setChats(safe);
+          setActiveId(safe[0]?.id ?? null);
+        }
+      }
+    } catch {
+      try { localStorage.removeItem("trexor.chats.v2"); } catch {}
+    }
     loaded.current = true;
   }, []);
   useEffect(() => {
     if (!loaded.current || busy) return;
-    try { localStorage.setItem("trexor.chats", JSON.stringify(chats.slice(0, 40))); } catch {}
+    try { localStorage.setItem("trexor.chats.v2", JSON.stringify(chats.slice(0, 40))); } catch {}
   }, [chats, busy]);
 
   const chat = chats.find(c => c.id === activeId);
